@@ -5,87 +5,474 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Visual Scene Explainer</title>
     <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
         body {
-            margin: 0;
-            background: #000;
+            background: #0a0a0a;
+            color: white;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
             display: flex;
             flex-direction: column;
             align-items: center;
-            justify-content: center;
-            height: 100vh;
-            color: white;
-            font-family: Arial, sans-serif;
+            min-height: 100vh;
+            padding: 16px;
         }
-        h2 { margin-bottom: 10px; }
+
+        header {
+            width: 100%;
+            max-width: 640px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 0;
+            margin-bottom: 12px;
+        }
+
+        header h1 {
+            font-size: 18px;
+            color: #1a73e8;
+            font-weight: 700;
+        }
+
+        #scanBadge {
+            font-size: 12px;
+            padding: 4px 10px;
+            border-radius: 20px;
+            background: #1a3a1a;
+            color: #4caf50;
+            border: 1px solid #4caf50;
+        }
+
+        #scanBadge.paused {
+            background: #3a1a1a;
+            color: #e53935;
+            border-color: #e53935;
+        }
+
         video {
             width: 100%;
             max-width: 640px;
-            border: 2px solid #444;
-            border-radius: 10px;
+            border-radius: 14px;
+            border: 2px solid #1a1a1a;
+            background: #111;
         }
+
+        /* Main status card */
+        #statusCard {
+            margin-top: 14px;
+            background: #141414;
+            border-radius: 14px;
+            padding: 18px;
+            width: 100%;
+            max-width: 640px;
+            border: 1px solid #222;
+            min-height: 100px;
+            position: relative;
+        }
+
+        #statusTag {
+            font-size: 11px;
+            color: #444;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        #dot {
+            width: 8px; height: 8px;
+            border-radius: 50%;
+            background: #444;
+            display: inline-block;
+            transition: background 0.3s;
+        }
+        #dot.speaking  { background: #4caf50; animation: pulse 1s infinite; }
+        #dot.analyzing { background: #ff9800; animation: pulse 0.5s infinite; }
+        #dot.listening { background: #1a73e8; }
+        #dot.error     { background: #e53935; }
+
+        @keyframes pulse {
+            0%,100% { opacity: 1; }
+            50%      { opacity: 0.3; }
+        }
+
+        #statusText {
+            font-size: 16px;
+            color: #e0e0e0;
+            line-height: 1.7;
+            font-weight: 400;
+        }
+
+        /* Mic indicator */
+        #micBar {
+            margin-top: 14px;
+            width: 100%;
+            max-width: 640px;
+            background: #141414;
+            border-radius: 10px;
+            padding: 12px 16px;
+            border: 1px solid #222;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 13px;
+            color: #555;
+        }
+
+        #micBar.active { color: #1a73e8; border-color: #1a3a6a; }
+        #micBar.heard  { color: #4caf50; border-color: #1a3a1a; }
+
+        #micIcon { font-size: 18px; }
+
+        /* Commands help */
+        #commandsCard {
+            margin-top: 14px;
+            background: #141414;
+            border-radius: 14px;
+            padding: 16px;
+            width: 100%;
+            max-width: 640px;
+            border: 1px solid #222;
+        }
+
+        #commandsCard h3 {
+            font-size: 12px;
+            color: #444;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            margin-bottom: 12px;
+        }
+
+        .cmd-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+
+        .cmd-item {
+            background: #1a1a1a;
+            border-radius: 8px;
+            padding: 8px 10px;
+            font-size: 13px;
+        }
+
+        .cmd-item .cmd-say {
+            color: #1a73e8;
+            font-weight: 600;
+            display: block;
+            margin-bottom: 2px;
+        }
+
+        .cmd-item .cmd-desc {
+            color: #666;
+            font-size: 11px;
+        }
+
         canvas { display: none; }
-        button {
-            margin-top: 20px;
-            padding: 15px 30px;
-            font-size: 18px;
-            background: #1a73e8;
-            color: white;
-            border: none;
-            border-radius: 10px;
-            cursor: pointer;
-        }
-        button:active { background: #1558b0; }
-        #status {
-            margin-top: 15px;
-            font-size: 14px;
-            color: #aaa;
-        }
     </style>
 </head>
 <body>
-    <h2>👁️ Visual Scene Explainer</h2>
+
+    <header>
+        <h1>👁️ Visual Scene Explainer</h1>
+        <span id="scanBadge">● Auto Scan ON</span>
+    </header>
+
     <video id="video" autoplay playsinline muted></video>
     <canvas id="canvas"></canvas>
-    <button onclick="captureAndSend()">📸 Describe Scene</button>
-    <div id="status">Tap the button to analyze your surroundings.</div>
+
+    <div id="statusCard">
+        <div id="statusTag">
+            <span id="dot"></span>
+            <span id="statusLabel">Status</span>
+        </div>
+        <div id="statusText">Starting up...</div>
+    </div>
+
+    <div id="micBar">
+        <span id="micIcon">🎤</span>
+        <span id="micText">Microphone: waiting...</span>
+    </div>
+
+    <div id="commandsCard">
+        <h3>🗣️ Voice Commands</h3>
+        <div class="cmd-grid">
+            <div class="cmd-item">
+                <span class="cmd-say">"Describe"</span>
+                <span class="cmd-desc">Analyze current scene</span>
+            </div>
+            <div class="cmd-item">
+                <span class="cmd-say">"Where is the..."</span>
+                <span class="cmd-desc">Find a specific object</span>
+            </div>
+            <div class="cmd-item">
+                <span class="cmd-say">"Read text"</span>
+                <span class="cmd-desc">Read visible text</span>
+            </div>
+            <div class="cmd-item">
+                <span class="cmd-say">"Repeat"</span>
+                <span class="cmd-desc">Hear again</span>
+            </div>
+            <div class="cmd-item">
+                <span class="cmd-say">"Faster / Slower"</span>
+                <span class="cmd-desc">Adjust speech speed</span>
+            </div>
+            <div class="cmd-item">
+                <span class="cmd-say">"Stop"</span>
+                <span class="cmd-desc">Stop speaking</span>
+            </div>
+            <div class="cmd-item">
+                <span class="cmd-say">"Pause"</span>
+                <span class="cmd-desc">Pause auto scan</span>
+            </div>
+            <div class="cmd-item">
+                <span class="cmd-say">"Resume"</span>
+                <span class="cmd-desc">Resume auto scan</span>
+            </div>
+        </div>
+    </div>
 
     <script>
-        const video = document.getElementById('video');
-        const canvas = document.getElementById('canvas');
-        const status = document.getElementById('status');
+        const video      = document.getElementById('video');
+        const canvas     = document.getElementById('canvas');
+        const statusText = document.getElementById('statusText');
+        const statusLabel= document.getElementById('statusLabel');
+        const dot        = document.getElementById('dot');
+        const micBar     = document.getElementById('micBar');
+        const micText    = document.getElementById('micText');
+        const scanBadge  = document.getElementById('scanBadge');
 
-        // Start camera
+        let lastDescription  = '';
+        let speechRate       = 1.0;
+        let autoScanActive   = true;
+        let isSpeaking       = false;
+        let isAnalyzing      = false;
+        let recognition      = null;
+        let lastCommandTime  = 0;
+        let lastSceneHash    = '';
+        const AUTO_INTERVAL  = 12000;
+        const COMMAND_COOLDOWN = 1500;
+
+        function setStatus(msg, state = '') {
+            statusText.textContent = msg;
+            dot.className = state;
+            statusLabel.textContent =
+                state === 'speaking'  ? 'Speaking'  :
+                state === 'analyzing' ? 'Analyzing' :
+                state === 'listening' ? 'Listening' :
+                state === 'error'     ? 'Error'     : 'Status';
+        }
+
+        function setMic(msg, state = '') {
+            micText.textContent = msg;
+            micBar.className    = state;
+        }
+
+        // ── Camera ──────────────────────────────────────────────
         navigator.mediaDevices.getUserMedia({
-            video: { facingMode: 'environment' }, // rear camera on mobile
+            video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } },
             audio: false
         })
-        .then(stream => { video.srcObject = stream; })
-        .catch(err => { status.textContent = '❌ Camera error: ' + err.message; });
+        .then(stream => {
+            video.srcObject = stream;
+            video.onloadedmetadata = () => {
+                setStatus('Ready. Listening for commands.', 'listening');
+                startVoiceListener();
+                setTimeout(() => captureAndAnalyze(), 1500);
+                startAutoScan();
+            };
+        })
+        .catch(err => setStatus('Camera error: ' + err.message, 'error'));
 
-        // Capture frame and send to server
-        function captureAndSend() {
-            status.textContent = '⏳ Analyzing scene...';
-            canvas.width = video.videoWidth;
+        // ── Speech ───────────────────────────────────────────────
+        function speak(text, onDone) {
+            window.speechSynthesis.cancel();
+            isSpeaking      = true;
+            lastDescription = text;
+
+            const u  = new SpeechSynthesisUtterance(text);
+            u.rate   = speechRate;
+            u.volume = 1.0;
+
+            const fallback = setTimeout(() => {
+                if (isSpeaking) {
+                    isSpeaking = false;
+                    setStatus('Listening for commands.', 'listening');
+                    if (onDone) onDone();
+                }
+            }, Math.max(text.length * 80, 3000));
+
+            u.onend = () => {
+                clearTimeout(fallback);
+                isSpeaking = false;
+                setStatus('Listening for commands.', 'listening');
+                if (onDone) onDone();
+            };
+
+            window.speechSynthesis.speak(u);
+        }
+
+        // ── Scene hash ───────────────────────────────────────────
+        function getSceneSnapshot() {
+            const s = document.createElement('canvas');
+            s.width = 16; s.height = 16;
+            s.getContext('2d').drawImage(video, 0, 0, 16, 16);
+            return s.toDataURL();
+        }
+
+        // ── Capture & Analyze ────────────────────────────────────
+        function captureAndAnalyze(specificObject = null) {
+            if (isAnalyzing) return;
+            isAnalyzing = true;
+            setStatus('Analyzing scene...', 'analyzing');
+
+            canvas.width  = video.videoWidth;
             canvas.height = video.videoHeight;
             canvas.getContext('2d').drawImage(video, 0, 0);
 
             canvas.toBlob(blob => {
-                const formData = new FormData();
-                formData.append('image', blob, 'frame.jpg');
+                const fd = new FormData();
+                fd.append('image', blob, 'frame.jpg');
+                if (specificObject) fd.append('find', specificObject);
 
                 fetch('/analyze', {
                     method: 'POST',
-                    body: formData
+                    headers: { 'ngrok-skip-browser-warning': 'true' },
+                    body: fd
                 })
-                .then(res => res.json())
+                .then(r => r.json())
                 .then(data => {
-                    status.textContent = '✅ ' + data.description;
-                    // Speak the result
-                    const utterance = new SpeechSynthesisUtterance(data.description);
-                    window.speechSynthesis.speak(utterance);
+                    isAnalyzing = false;
+                    speak(data.description);
                 })
-                .catch(err => { status.textContent = '❌ Error: ' + err.message; });
-            }, 'image/jpeg');
+                .catch(err => {
+                    isAnalyzing = false;
+                    setStatus('Error analyzing scene.', 'error');
+                    speak('Sorry, I had trouble analyzing the scene.');
+                });
+            }, 'image/jpeg', 0.85);
+        }
+
+        // ── Auto Scan ────────────────────────────────────────────
+        function startAutoScan() {
+            setInterval(() => {
+                if (!autoScanActive || isSpeaking || isAnalyzing) return;
+                const snap = getSceneSnapshot();
+                if (snap !== lastSceneHash) {
+                    lastSceneHash = snap;
+                    captureAndAnalyze();
+                }
+            }, AUTO_INTERVAL);
+        }
+
+        // ── Voice Listener ───────────────────────────────────────
+        function startVoiceListener() {
+            const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+            if (!SR) { setMic('Voice commands not supported.'); return; }
+
+            recognition                 = new SR();
+            recognition.continuous      = true;
+            recognition.interimResults  = false;
+            recognition.lang            = 'en-US';
+            recognition.maxAlternatives = 3;
+
+            recognition.onstart = () => setMic('Listening for commands...', 'active');
+
+            recognition.onresult = (event) => {
+                const now     = Date.now();
+                const result  = event.results[event.results.length - 1];
+                const command = result[0].transcript.trim().toLowerCase();
+                const conf    = result[0].confidence;
+
+                const isInterrupt = (
+                    command.includes('stop')     ||
+                    command.includes('faster')   ||
+                    command.includes('slower')   ||
+                    command.includes('repeat')   ||
+                    command.includes('slow down')||
+                    command.includes('speed up')
+                );
+
+                if (isSpeaking && !isInterrupt) return;
+                if (!isInterrupt && now - lastCommandTime < COMMAND_COOLDOWN) return;
+                if (conf < 0.2 || command.length < 2) return;
+
+                lastCommandTime = now;
+                setMic('Heard: "' + command + '"', 'heard');
+                setTimeout(() => setMic('Listening for commands...', 'active'), 2000);
+                handleCommand(command);
+            };
+
+            recognition.onerror = (e) => {
+                if (e.error === 'no-speech') return;
+                setTimeout(() => { try { recognition.start(); } catch(e){} }, 1000);
+            };
+
+            recognition.onend = () => {
+                try { recognition.start(); } catch(e){}
+            };
+
+            recognition.start();
+        }
+
+        // ── Command Handler ──────────────────────────────────────
+        function handleCommand(cmd) {
+            if (cmd.includes('stop') || cmd.includes('quiet') || cmd.includes('silence')) {
+                window.speechSynthesis.cancel();
+                isSpeaking = false;
+                setStatus('Stopped.', '');
+
+            } else if (cmd.includes('faster') || cmd.includes('speed up') || cmd.includes('too slow')) {
+                speechRate = Math.min(speechRate + 0.25, 2.0);
+                window.speechSynthesis.cancel();
+                isSpeaking = false;
+                speak('Speed increased. ' + lastDescription);
+
+            } else if (cmd.includes('slower') || cmd.includes('slow down') || cmd.includes('too fast')) {
+                speechRate = Math.max(speechRate - 0.25, 0.5);
+                window.speechSynthesis.cancel();
+                isSpeaking = false;
+                speak('Speed decreased. ' + lastDescription);
+
+            } else if (cmd.includes('repeat') || cmd.includes('again') || cmd.includes('say again')) {
+                window.speechSynthesis.cancel();
+                isSpeaking = false;
+                speak(lastDescription || 'Nothing to repeat yet.');
+
+            } else if (cmd.includes('pause') || cmd.includes('stop scanning')) {
+                autoScanActive = false;
+                scanBadge.textContent = '● Auto Scan OFF';
+                scanBadge.className   = 'paused';
+                speak('Auto scan paused.');
+
+            } else if (cmd.includes('resume') || cmd.includes('start scanning')) {
+                autoScanActive = true;
+                scanBadge.textContent = '● Auto Scan ON';
+                scanBadge.className   = '';
+                speak('Resuming.', () => captureAndAnalyze());
+
+            } else if (cmd.includes('read text') || cmd.includes('what does it say') || cmd.includes('any text')) {
+                speak('Reading text.', () => captureAndAnalyze('text_only'));
+
+            } else if (cmd.includes('where is') || cmd.includes('find') || cmd.includes('locate')) {
+                const obj = cmd
+                    .replace('where is', '').replace('find the', '')
+                    .replace('find', '').replace('locate the', '')
+                    .replace('locate', '').replace('the', '').trim();
+                if (obj.length > 1) speak('Looking for ' + obj, () => captureAndAnalyze(obj));
+
+            } else if (
+                cmd.includes('describe')        ||
+                cmd.includes('what do you see') ||
+                cmd.includes('look around')     ||
+                cmd.includes('scan')            ||
+                cmd.includes('analyze')         ||
+                cmd.includes('what is around')
+            ) {
+                captureAndAnalyze();
+            }
         }
     </script>
 </body>

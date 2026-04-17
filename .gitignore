@@ -2,3 +2,14 @@ venv/
 __pycache__/
 *.pyc
 .env
+
+# system files
+desktop.ini
+
+# binaries
+*.exe
+
+# ML models
+*.pt
+*.pth
+*.h5
